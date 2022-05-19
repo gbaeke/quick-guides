@@ -16,6 +16,7 @@ kubectl create serviceaccount sa-demo --namespace=default
 kubectl get sa sa-demo -o yaml
 
 # the YAML references a secret, check the secret (replace hash with actual value)
+# the secret contains 3 pieces of data: a certificate, a token and a namespace
 kubectl get secret sa-demo-token-<hash> -o yaml
 
 # retrieve the JWT token from the secret
@@ -32,7 +33,7 @@ kubectl patch deploy nginx -p '{"spec":{"template":{"spec":{"serviceAccount":"sa
 # check the YAML of the deployment and check for serviceAccount
 kubectl get deploy nginx -o yaml
 
-# exec into the container of an nginx pod
+# exec into the container of the nginx pod
 export POD_NAME=$(kubectl get pods -l "app=nginx" -o jsonpath="{.items[0].metadata.name}")
 kubectl exec -it $POD_NAME -- sh
 
@@ -44,16 +45,21 @@ cat ca.crt # certificate to verify requests to https://kubernetes (see later)
 cat namespace # just prints the namespace
 
 # use curl to talk to the Kubernetes API using the kubernetes service in each namespace
-# we try to list pods
+# we try to list pods; authentication is via the Authorization HTTP header and
+# we tell curl to use ca.crt to verify the connection to https://kubernetes
 curl -H "Authorization: Bearer $(cat token)" --cacert ca.crt https://kubernetes/api/v1/namespaces/default/pods
 
-# the above command will fail because the service account does not have access
+# the above command will fail because the service account does not have access to list pods
 # open another terminal on your computer and leave the shell to the pod open
 # we will add a role and rolebinding
-kubectl create role pod-reader --verb=list --resource=pods
-kubectl create rolebinding pod-reader --role=pod-reader --serviceaccount=default:sa-demo
 
-# in the shell to the pod, run the below command again, pods will be listed
+# role only allows list on pods
+kubectl create role pod-reader --verb=list --resource=pods --namespace default
+
+# assign the role to the service account
+kubectl create rolebinding pod-reader --role=pod-reader --serviceaccount=default:sa-demo --namespace default
+
+# in the shell to the pod, run the below command again, pods will be listed (JSON output)
 curl -H "Authorization: Bearer $(cat token)" --cacert ca.crt https://kubernetes/api/v1/namespaces/default/pods
 ```
 
