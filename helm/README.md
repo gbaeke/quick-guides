@@ -1,9 +1,9 @@
-# Helm
+# Helm ⛵
 
 This quick guide has two parts:
 
 - Using Helm
-- Creating a Helm chart
+- Creating a Helm chart (👉 TODO)
 
 ## Using Helm
 
