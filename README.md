@@ -5,5 +5,5 @@
 - Kubernetes Service Account: [link](/service-account/README.md)
 - Helm: [link](helm/README.md)
     - [Using Helm](helm/README.md#using-helm)
-    - [Creating a chart](helm/README.md#creating-a-helm-chart-🔨)
+    - [Creating a chart](helm/README.md#creating-a-helm-chart-)
 
