@@ -111,6 +111,31 @@ helm rollback myapp 2 -n super-api
 # note: if you do not use --keep-history during uninstall you cannot do a rollback afterwards
 helm history myapp -n super-api
 
+# what if you want to check the chart before installing?
+helm pull super-api/super-api
+
+# the above command only downloads the .tgz archive; Helm charts are packaged that way
+# let's also untar the file
+helm pull super-api/super-api --untar
+
+# a folder with name super-api is now in your current folder
+# checkout the files in the folder to see the contents of the chart
+# you can actually install the chart from the folder
+helm upgrade --install myapp super-api  # super-api is the folder containing the chart
+
+# or use
+cd super-api
+helm upgrade --install myapp . # use the chart in the current folder
+
+# to check the chart for errors or warnings
+helm lint
+
+# to check the manifest that the chart generates
+helm template .
+
+# to check the template with a user-defined value
+helm template . --set image.tag=HELLO | grep HELLO  # will show the line that sets image
+
 ```
 
 
