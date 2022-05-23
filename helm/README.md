@@ -162,4 +162,161 @@ helm template . --values myvalues.yaml | grep replicas # should show 10
 
 ```
 
+## Creating a Helm chart 🔨
+
+Although you can create a Helm chart with a starter, we will create one from scratch. To use the default starter, use `helm create chartname`. That creates a directory `chartname` in your current directory.
+
+A chart is just a bunch of folders and files that we will create manually. In this example, we build a simple chart for super-api. The application's container image is at ghcr.io/gbaeke/super. There are multiple tags available.
+
+```bash
+# go to your $HOME folder
+cd $HOME
+
+# create a mycharts folder and cd into it
+mkdir mycharts; cd mycharts
+
+# create a directory to hold your chart and cd into it
+mkdir super-api; cd super-api
+
+# create a templates folder; this folder will hold templates for Kubernetes objects
+# such as deployments, services, etc...
+mkdir templates
+
+# create a Chart.yaml value for the chart metadata such as chart version, app version, description, and more...
+cat << EOF > Chart.yaml
+apiVersion: v2
+name: superapi
+description: A Helm chart to install superapi
+
+# optional
+# kubeVersion: ">=1.20"
+
+type: application
+version: "1.0.0"
+appVersion: "1.0.7"
+EOF
+
+# when Chart.yaml is created you can already run helm lint
+# it will provide some information but no should not list errors
+helm lint
+
+# create a file values.yaml to hold default values
+# these values, combined with user-defined values that may overwrite the defaults
+# will result in the final set of computet values; these values will be sent to
+# your templates in the templates folder to be rendered
+cat << EOF > values.yaml
+replicaCount: 1
+
+image:
+  repository: ghcr.io/gbaeke/super
+  pullPolicy: IfNotPresent
+  tag: ""
+EOF
+
+# the above properties can have any name; you refer to these values later in your templates
+# now cd into templates
+cd templates
+
+# create deployment.yaml
+cat <<EOF > deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  superapi-deployment
+  labels:
+    app: superapi
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: superapi
+  template:
+    metadata:
+      labels:
+        app:  superapi
+    spec:
+      restartPolicy: Always
+      containers:
+      - image: ghcr.io/gbaeke/super:1.0.7
+        imagePullPolicy: Always
+        name:  superapi
+        resources:
+          limits:
+            cpu: "20m"
+            memory: "55M"          
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 90
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 30
+          timeoutSeconds: 10
+        env:
+        - name:  WELCOME
+          value: "Hello from superapi deployed by Helm"
+        - name: PORT
+          value: "8080"      
+        ports:
+        - containerPort:  8080
+          name:  http
+EOF
+
+# Create service.yaml
+cat <<EOF > service.yaml
+kind: Service
+apiVersion: v1
+metadata:
+  name:  superapi-svc
+spec:
+  selector:
+    app:  superapi
+  type:  ClusterIP
+  ports:
+  - name:  http
+    port:  80
+    targetPort:  8080
+EOF
+
+# run helm template to see the manifest that Helm renders from the templates
+# in the templates folder; of course, the templates we just created do not
+# contain any code to pickup any of our user supplied values
+
+helm template ../   # need to go one level higher than templates
+
+# in deployment.yaml, on line 23, let's use the values from the values.yaml and Chart.yaml file
+sed -i 's/ghcr.io\/gbaeke\/super:1.0.7/"{{.Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"/' deployment.yaml
+
+# check the line that contains image:
+# the output should be:
+# - image: "{{.Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+cat deployment.yaml | grep image:
+
+# run helm template again and grep for image:
+# image should be: "ghcr.io/gbaeke/super:1.0.7"
+helm template ../ | grep image:
+
+# check with user supplied value
+helm template ../ --set image.tag=HELLO | grep image:
+
+# add some resources yaml to values.yaml
+
+cat <<EOF >> ../values.yaml
+
+resources:
+  limits:
+    cpu: "20m"
+    memory: "50M"
+EOF
+
+# modify deployment.yaml to include the resources YAML block from values.yaml
+
 
