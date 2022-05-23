@@ -160,6 +160,10 @@ EOF
 # now use the values file; we will test with helm template but this will work with install and upgrade as well
 helm template . --values myvalues.yaml | grep replicas # should show 10
 
+# by default, Helm does not wait until your deployments and pods are ready
+# to let Helm wait, use the following command:
+helm upgrade --install myapp super-api/super-api --namespace super-api --wait
+
 ```
 
 ## Creating a Helm chart 🔨
@@ -207,8 +211,8 @@ helm lint
 
 # create a file values.yaml to hold default values
 # these values, combined with user-defined values that may overwrite the defaults
-# will result in the final set of computet values; these values will be sent to
-# your templates in the templates folder to be rendered
+# will result in the final set of computed values; the computer values are sent to
+# your templates in the templates folder to be rendered and can be found in .Values
 cat << EOF > values.yaml
 replicaCount: 1
 
@@ -303,6 +307,7 @@ sed -i 's/ghcr.io\/gbaeke\/super:1.0.7/"{{.Values.image.repository }}:{{ .Values
 # check the line that contains image:
 # the output should be:
 # - image: "{{.Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+# this uses the image repo and image tag from values.yaml; in image.tag is empty than use appVersion defined in Chart.yaml
 cat deployment.yaml | grep image:
 
 # run helm template again and grep for image:
@@ -327,8 +332,8 @@ EOF
 sed -i '27,29d' deployment.yaml
 
 # replace resources: block
-# toYaml is a function that converts the internal implementation of .Values.resource to YAML
-# the - in the beginning removes whitespace and the previous newline to we add a newline and indent
+# toYaml is a function that converts the internal implementation of .Values.resources to YAML
+# the - in the beginning removes whitespace and the previous newline so we add a newline and indent
 # by 12 spaces (n in nindent does the newline)
 
 sed -i 's/resources:/resources:\n            {{- toYaml .Values.resources | nindent 12 }}/' deployment.yaml
@@ -337,9 +342,9 @@ sed -i 's/resources:/resources:\n            {{- toYaml .Values.resources | nind
 # resources:
 #   {{- toYaml .Values.resources | nindent 12 }}
 
-# run helm template again and check if the cpu limit is set to 50m
+# run helm template again with another cpu limit and check if the limit is set to 50m
 # if it is, the chart picks use the YAML under resources: in values.yaml
-# however, you replaced the memory limit with --set resulting in the final computed values 
+# however, you replace the cpu limit with --set resulting in the final computed values 
 
 helm template ../ --set resources.limits.cpu="50m"
 
@@ -368,7 +373,7 @@ EOF
 # run helm template with default values: the ConfigMap should be in the output
 helm template ../ | grep ConfigMap
 
-# run helm template with config.enabled=false; the output does not show kind:ConfigMap
+# run helm template with config.enabled=false; the output does not show kind:ConfigMap because it is not in the output
 helm template ../ --set config.enabled=false | grep ConfigMap
 
 # install the chart from the file system; a chart does not have to come from a registry
@@ -378,6 +383,9 @@ helm install chart-demo .
 # the chart should have been installed to your current namespace (usually default)
 # use helm list to check
 helm list
+
+# so see all installed Helm charts in all namespaces
+helm list --all-namespaces
 
 # add a NOTES.txt
 cat << EOF > templates/NOTES.txt
