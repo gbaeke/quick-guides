@@ -168,6 +168,11 @@ Although you can create a Helm chart with a starter, we will create one from scr
 
 A chart is just a bunch of folders and files that we will create manually. In this example, we build a simple chart for super-api. The application's container image is at ghcr.io/gbaeke/super. There are multiple tags available.
 
+Requirements:
+- bash 
+- helm (>=3.8)
+- sed
+
 ```bash
 # go to your $HOME folder
 cd $HOME
@@ -318,5 +323,68 @@ resources:
 EOF
 
 # modify deployment.yaml to include the resources YAML block from values.yaml
+# remove line 27 to 29 (only resources: is kept)
+sed -i '27,29d' deployment.yaml
 
+# replace resources: block
+# toYaml is a function that converts the internal implementation of .Values.resource to YAML
+# the - in the beginning removes whitespace and the previous newline to we add a newline and indent
+# by 12 spaces (n in nindent does the newline)
 
+sed -i 's/resources:/resources:\n            {{- toYaml .Values.resources | nindent 12 }}/' deployment.yaml
+
+# in deployment.yaml you should now find
+# resources:
+#   {{- toYaml .Values.resources | nindent 12 }}
+
+# run helm template again and check if the cpu limit is set to 50m
+# if it is, the chart picks use the YAML under resources: in values.yaml
+# however, you replaced the memory limit with --set resulting in the final computed values 
+
+helm template ../ --set resources.limits.cpu="50m"
+
+# let's add some default values for use with a ConfigMap
+cat <<EOF >> ../values.yaml
+config:
+  enabled: true
+  welcome: "Welcome to Super API v1"
+EOF
+
+# now add a ConfigMap
+cat <<EOF > configmap.yaml
+{{- if .Values.config.enabled -}}
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: superapi-config
+  namespace: default
+data:
+  welcome: {{ .Values.config.welcome | upper | quote }} # Welcome message
+{{- end -}}
+EOF
+
+# above, the ConfigMap is only rendered when config.enabled=true (default)
+# the welcome field is set to .Values.config.welcome converted to uppercase and quoted with ""
+# run helm template with default values: the ConfigMap should be in the output
+helm template ../ | grep ConfigMap
+
+# run helm template with config.enabled=false; the output does not show kind:ConfigMap
+helm template ../ --set config.enabled=false | grep ConfigMap
+
+# install the chart from the file system; a chart does not have to come from a registry
+cd ..
+helm install chart-demo . 
+
+# the chart should have been installed to your current namespace (usually default)
+# use helm list to check
+helm list
+
+# add a NOTES.txt
+cat << EOF > templates/NOTES.txt
+
+Congratulations, you have installed app version {{ .Values.image.tag | default .Chart.AppVersion }}!
+
+EOF
+
+# upgrade the chart to see notes.txt
+helm upgrade chart-demo .
