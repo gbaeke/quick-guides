@@ -17,16 +17,29 @@ Requirements:
 helm version
 
 # Helm charts live in repositories; add the repository for super-api
+# Find useful repositories over at https://artifacthub.io/
 helm repo add super-api https://gbaeke.github.io/helm-chart/
 
-# List repositories; super-api should be listen
+# List local repositories; super-api should be listed
 helm repo list
+
+# Check .config folder in $HOME
+cd $HOME/.config/helm
+cat repositories.yaml # to show file where repositories are saved
+
+# Check .cache folder
+cd $HOME/.cache/helm/repository
+ls # shows cached repository indices 
+
+# Go back to home folder
+cd $HOME
 
 # Search the repository
 helm search repo super-api
 
 # The repository has one chart; it has a chart version, an appVersion and a description
 # example: super-api/super-api 1.0.0   1.0.3  A Helm chart for super-api
+# by convention, app version is the version of the app the chart installs by default
 # Let's install the chart and call the release myapp; install in a namespace and create it
 # if it does not exist
 
