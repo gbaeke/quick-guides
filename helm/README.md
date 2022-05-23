@@ -90,12 +90,12 @@ helm get values myapp -n super-api
 # computed values; computed values are the combination of default values & user supplied values
 helm get manifest  myapp -n super-api
 
-# to only get notes; notes are defined by the chart developer by included a notes.txt in the templates
+# to only get notes; notes are defined by the chart developer by including a notes.txt in the templates
 # and optionally show computed values in the notes (.e.g. deployment name, pod names, ...)
 helm get notes myapp -n super-api
 
 # get information about a specific revision
-# e.g, get values for the first revision which results in null (no values supplied)
+# e.g., get values for the first revision which results in null (no values supplied)
 helm get values myapp -n super-api --revision 1
 
 # rollback to revision 1
@@ -108,7 +108,7 @@ helm history myapp -n super-api
 # run the command below to see three secrets of type helm.sh/release.v1
 kubectl get secrets -n super-api
 
-# let's uninstall the chart but keep the history
+# let's uninstall the chart but keep the history (by default, history is removed)
 helm uninstall myapp -n super-api --keep-history
 
 # history will still show 3 releases (the secrets are still in the namespace)
@@ -148,6 +148,17 @@ helm template .
 
 # to check the template with a user-defined value
 helm template . --set image.tag=HELLO | grep HELLO  # will show the line that sets image
+helm template . --set replicaCount=10 autoscaling.enabled=false # replicas in deployment only set when autoscaling disabled
+
+# setting a lot of user-defined values with --set is annoying; we can create a values file in the current folder
+cat << EOF > myvalues.yaml
+replicaCount: 10
+autoscaling:
+  enabled: false
+EOF
+
+# now use the values file; we will test with helm template but this will work with install and upgrade as well
+helm template . --values myvalues.yaml | grep replicas # should show 10
 
 ```
 
