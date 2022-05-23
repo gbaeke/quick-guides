@@ -85,9 +85,9 @@ helm get all myapp -n super-api
 # to only get user supplied values
 helm get values myapp -n super-api
 
-# to only get the manifest that is generated from the templates in the chart
+# to only get the manifest that is generated from the templates in the chart we can use helm get manifest
 # the chart developer decides which templates to include and how to fill them with
-# computed values; computer values are the combination of default values & user supplied values
+# computed values; computed values are the combination of default values & user supplied values
 helm get manifest  myapp -n super-api
 
 # to only get notes; notes are defined by the chart developer by included a notes.txt in the templates
