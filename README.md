@@ -6,5 +6,5 @@
 - Helm: [link](helm/README.md)
     - [Using Helm](helm/README.md#using-helm)
     - [Creating a chart](helm/README.md#creating-a-helm-chart-)
-- Container Apps: [text](containerapps/README.md)
+- Container Apps: [link](containerapps/README.md)
 
