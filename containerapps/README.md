@@ -235,6 +235,8 @@ git clone https://github.com/gbaeke/super-api.git && cd super-api
 git checkout quickguide
  
 # bring up the app; container build will take some time
+# there have been times when this command seems to hang; you can then press CTRL-C and try again
+# it is possible although the commands seemed to hang, the image was built anyway
 az containerapp up -n super-api --source . --ingress external --target-port 8080 --environment env-aca
  
 # list apps; super-api has been added with a new external Fqdn
