@@ -197,7 +197,7 @@ flux reconcile kustomization cluster-config-infra -n cluster-config
 # run the command below and rerun until it says Release reconcilation succeeded
 flux get hr -n cluster-config
 
-# you have not created the following in the cluster-config namespace
+# you have now created the following in the cluster-config namespace
 # - a GitRepository resource: points to the repo we created with gh CLI
 # - a Kustomization: installs all YAML found in the ./infra folder of our repo
 # - a HelmRepository resource: tells Flux where to find Bitnami charts
@@ -215,7 +215,7 @@ kubectl get helmrelease -n cluster-config
 # make sure you are still in the root of the local flux-quick repo and create an apps folder
 mkdir apps
 
-# add another HelmRepositoryk; this one is from https://github.com/gbaeke/helm-chart
+# add another HelmRepository; this one is from https://github.com/gbaeke/helm-chart
 flux create source helm super-api \
    --url=https://gbaeke.github.io/helm-chart/ \
    --namespace cluster-config \
@@ -271,7 +271,7 @@ git status # should show you are up-to date
 # tell Flux to pull changes from git NOW! :-)
 flux reconcile source git cluster-config -n cluster-config
 
-# reconsile the kustomization as well
+# reconcile the kustomization as well
 flux reconcile kustomization cluster-config-apps -n cluster-config
 flux reconcile kustomization cluster-config-infra -n cluster-config
 
