@@ -279,7 +279,7 @@ az k8s-configuration flux update -g $RG -c $CLUSTER \
   --kustomization name=apps path=./apps prune=true dependsOn=["infra"]
 
 # notice that we also commited values.yaml to the apps folder
-# the kustomization will try to apply that any .yaml file in ./apps to your cluster and that
+# the kustomization will try to apply any .yaml file in ./apps to your cluster and that
 # will result in an error: failed to decode Kubernetes YAML; let's remove that file from the repo
 rm apps/values.yaml
 git add .
