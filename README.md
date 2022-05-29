@@ -7,4 +7,5 @@
     - [Using Helm](helm/README.md#using-helm)
     - [Creating a chart](helm/README.md#creating-a-helm-chart-)
 - Container Apps: [link](containerapps/README.md)
+- Flux v2 on AKS: [link](fluxv2/README.md)
 
