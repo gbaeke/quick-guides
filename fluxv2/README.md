@@ -137,22 +137,33 @@ gh repo create $REPO --public --clone; cd $REPO
 mkdir infra
 
 # create a Helm repository source in the folder
+# the flux cli makes it easier to create these objects either
+# directly on the K8S cluster or, in this case, to export the
+# resource as YAML to include in the repository used by the
+# AKS Flux configuration
 flux create source helm redis \
    --url=https://charts.bitnami.com/bitnami \
    --interval=10m --export > infra/redis-chart.yaml
 
-# look at the created file; not that it uses namespace flux-system
+# look at the created file; note that it uses namespace flux-system which
+# is the default namespace; this resource tells Flux about the bitnami
+# helm chart repository; this is much like running helm repo add and helm repo
+# update on your local machine
 cat infra/redis-chart.yaml
 
 # later, we will create the Flux configuration in a namespace called cluster-config
 # let's create the redis chart again, this time using the cluster-config namespace
-# instead of flux-system
+# instead of flux-system; it is cleaner to keep the Flux resources in the namespace
+# used by the AKS Flux configuration
 flux create source helm redis \
    --url=https://charts.bitnami.com/bitnami --namespace cluster-config \
    --interval=10m --export > infra/redis-chart.yaml
 
-# now we create a HelmRelease, which will tell FLux how to install the chart
-# from the source we just defined
+# now we create a HelmRelease, which will tell Flux how to install the chart
+# from the source we just defined; we install this chart without setting values
+# this chart installs redis in namespace redis; the namespace is created when
+# it does not exist (not the default)
+# Note that the Helm release history will be in ns cluster-config and not in ns redis
 flux create helmrelease redis \
   --source=HelmRepository/redis \
   --chart=redis \
@@ -168,7 +179,10 @@ cat infra/redis-release.yaml
 # let's create a Flux configuration now; first grab the remote origin
 REMOTE=$(git remote get-url origin)
 
-# create the configuration; gh command created a master branch
+# create the AKS Flux Configuration; gh command created a master branch
+# this command will create two Flux resources:
+# - a source pointing to the git repo
+# - a kustomization that installs all YAML found in folder ./infra
 az k8s-configuration flux create -g $RG -c $CLUSTER \
   -n cluster-config --namespace cluster-config -t managedClusters \
   --scope cluster -u $REMOTE \
@@ -176,6 +190,7 @@ az k8s-configuration flux create -g $RG -c $CLUSTER \
   --kustomization name=infra path=./infra prune=true
 
 # this should result in errors because we did not push changes to git
+# the kustomization does not find an ./infra folder YET
 flux get kustomizations -n cluster-config
 
 # in the flux configuration, you should see errors as well like ArtifactFailed
@@ -188,7 +203,8 @@ git push --set-upstream origin master
 git status # should show you are up-to date
 
 # let's speed things up; the flux configuration created a git source that points to our repo
-# the source is in the cluster-config folder
+# the source is in the cluster-config folder; by reconciling the git source with the command
+# Flux pulls in the repo faster; the ./infra folder will be known
 flux reconcile source git cluster-config -n cluster-config
 flux reconcile kustomization cluster-config-infra -n cluster-config
 
@@ -197,21 +213,21 @@ flux reconcile kustomization cluster-config-infra -n cluster-config
 # run the command below and rerun until it says Release reconcilation succeeded
 flux get hr -n cluster-config
 
-# you have now created the following in the cluster-config namespace
+# you have now created the following in the cluster-config namespace:
 # - a GitRepository resource: points to the repo we created with gh CLI
 # - a Kustomization: installs all YAML found in the ./infra folder of our repo
 # - a HelmRepository resource: tells Flux where to find Bitnami charts
 # - a HelmRelease resource: tells Flux how to install the Redis chart
-# the first two resources where created by az k8s-configuration create
+# the first two resources where created by the "az k8s-configuration create" command
 # the last two were created from our git repo
-# the commands below show these resources at the Kubernetes level
+# the commands below show these (custom) resources at the Kubernetes level
 kubectl get gitrepository -n cluster-config
 kubectl get kustomization -n cluster-config
 kubectl get helmrepository -n cluster-config
 kubectl get helmrelease -n cluster-config
 
 # we now want to add an application that is dependent on Redis
-# the app we will install does not actually need Redis; let's just pretend
+# the app we will install does not actually need Redis; let's just pretend  :-)
 # make sure you are still in the root of the local flux-quick repo and create an apps folder
 mkdir apps
 
@@ -224,14 +240,17 @@ flux create source helm super-api \
 # check the YAML
 cat apps/super-api-chart.yaml
 
-# create a values.yaml
+# our HelmRelease will set several Helm chart values
+# one way of defining this is to create a values.yaml file and specify it when we
+# create the HelmRelease with "flux create"
 cat << EOF > apps/values.yaml
 replicaCount: 3
 image:
   tag: "1.0.7"
 EOF
 
-# add another Helm release
+# add another Helm release and use --values to reference the values file
+# we will install the super-api chart and override the image tag to install version 1.0.7
 flux create helmrelease super-api \
   --source=HelmRepository/super-api \
   --chart=super-api \
@@ -242,26 +261,26 @@ flux create helmrelease super-api \
   --values=apps/values.yaml \
   --export > apps/super-api-release.yaml
 
-# check the YAML; the contents of values.yaml has been included
+# check the YAML; the contents of values.yaml has been included (see spec.values)
+# it is also possible to retrieve values.yaml from a ConfigMap
 cat apps/super-api-release.yaml
 
-# push the files to git
+# push the files to git again
 git add .
 git commit -m "flux config"
-git push --set-upstream origin master
+git push
 git status # should show you are up-to date
 
 # the helm chart will not be installed; there is no kustomization that
 # uses the apps path; let's fix that and make the apps kustomization
-# dependent on infra
+# dependent on the infra kustomization
 az k8s-configuration flux update -g $RG -c $CLUSTER \
   -n cluster-config -t managedClusters \
   --kustomization name=apps path=./apps prune=true dependsOn=["infra"]
 
 # notice that we also commited values.yaml to the apps folder
-# the kustomization will try to apply that yaml to your cluster and that
-# will result in an error: failed to decode Kubernetes YAML
-# let's remove that file from the repo
+# the kustomization will try to apply that any .yaml file in ./apps to your cluster and that
+# will result in an error: failed to decode Kubernetes YAML; let's remove that file from the repo
 rm apps/values.yaml
 git add .
 git commit -m "remove values"
@@ -272,11 +291,12 @@ git status # should show you are up-to date
 flux reconcile source git cluster-config -n cluster-config
 
 # reconcile the kustomization as well
-flux reconcile kustomization cluster-config-apps -n cluster-config
 flux reconcile kustomization cluster-config-infra -n cluster-config
+flux reconcile kustomization cluster-config-apps -n cluster-config
 
 
 # check if the apps kustomization is ready; this can take some time
 # it will take a while for the Azure Portal to show all config objects as well
+# in the Azure Portal, navigate to the AKS resource and click GitOps
 flux get kustomization cluster-config-apps -n cluster-config
 ```
