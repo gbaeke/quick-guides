@@ -4,6 +4,20 @@ We will create a default Helm chart from a starter and save it to Azure Containe
 
 To know more about working with Helm and creating Helm charts from scratch, see [helm\README.md](../helm/README.md)
 
+## Requirements
+
+You need the following to run the commands:
+
+- An Azure subscription
+- A deployed AKS cluster with a single node if you want to deploy the chart
+- Azure CLI and logged in to the subscription with owner access
+- All commands run in bash, in my case in WSL 2.0 on Windows 11
+- kubectl and a working kube config (use az aks get-credentials)
+- helm
+- jq
+
+## Quick Guide
+
 ```bash
 # create a scratch folder
 scratch=scratch$RANDOM
