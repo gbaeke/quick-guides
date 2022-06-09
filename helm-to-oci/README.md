@@ -2,7 +2,7 @@
 
 We will create a default Helm chart from a starter and save it to Azure Container Registry.
 
-To know more about working with Helm and creating Helm charts from scratch, see [helm\README.md](https://helm\README.md)
+To know more about working with Helm and creating Helm charts from scratch, see [helm\README.md](../helm/README.md)
 
 ```bash
 # create a scratch folder
