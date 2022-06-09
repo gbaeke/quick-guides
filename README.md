@@ -10,6 +10,7 @@ Some of these guides have posts on my blog with more info: go to https://blog.ba
 - Helm: [link](helm/README.md)
     - [Using Helm](helm/README.md#using-helm)
     - [Creating a chart](helm/README.md#creating-a-helm-chart-)
+    - [Helm charts in ACR](helm-to-oci/README.md)
 - Container Apps: [link](containerapps/README.md)
 - Flux v2 on AKS: [link](fluxv2/README.md)
 
