@@ -6,57 +6,32 @@ Requirements:
 - bash
 - Azure CLI and logged in to subscription
 - working Kube config and kubectl
-- helm
-- azwi: `brew install Azure/azure-workload-identity/azwi`
 
 Here are all the commands:
 
 ```bash
+# update Azure CLI aks-preview extension
+az extension update --name aks-preview
+
+# register preview feature
+az feature register --namespace "Microsoft.ContainerService" --name "EnableWorkloadIdentityPreview"
+
+# check if registered
+az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/EnableWorkloadIdentityPreview')].{Name:name,State:properties.state}"
+
+# if registered then continue
+az provider register --namespace Microsoft.ContainerService
+
 # install oidc issuer
-CLUSTER=<AKS_CLUSTER_NAME>
-RG=<AKS_CLUSTER_RESOURCE_GROUP>
+CLUSTER=kub-oidc
+RG=rg-aks-oidc
  
-az aks update -n $CLUSTER -g $RG --enable-oidc-issuer
+az aks create -g $RG -n $CLUSTER --node-count 1 --enable-oidc-issuer --enable-workload-identity --generate-ssh-keys
 
-# add workload identity webhook
-AZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
-  
-helm repo add azure-workload-identity https://azure.github.io/azure-workload-identity/charts
-  
-helm repo update
-  
-helm install workload-identity-webhook azure-workload-identity/workload-identity-webhook \
-   --namespace azure-workload-identity-system \
-   --create-namespace \
-   --set azureTenantID="${AZURE_TENANT_ID}"
+# get OIDC issuer URL
+export AKS_OIDC_ISSUER="$(az aks show -n $CLUSTER -g $RG --query "oidcIssuerProfile.issuerUrl" -otsv)"
 
-# create Azure AD application
-APPLICATION_NAME=WorkloadDemo
-azwi serviceaccount create phase app --aad-application-name $APPLICATION_NAME
-
-# get application app id and grant Reader on Azure CLI subscription
-APPLICATION_CLIENT_ID="$(az ad sp list --display-name $APPLICATION_NAME --query '[0].appId' -otsv)"
-
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
- 
-az role assignment create --assignee-object-id $APPLICATION_CLIENT_ID --role "Reader" --scope /subscriptions/$SUBSCRIPTION_ID
-
-# Create Kubernetes service account to use with workload identity
-SERVICE_ACCOUNT_NAME=sademo
-SERVICE_ACCOUNT_NAMESPACE=default
- 
-azwi serviceaccount create phase sa \
-  --aad-application-name "$APPLICATION_NAME" \
-  --service-account-namespace "$SERVICE_ACCOUNT_NAMESPACE" \
-  --service-account-name "$SERVICE_ACCOUNT_NAME"
-
-# Configure federation on the AAD app 
-azwi serviceaccount create phase federated-identity \
-  --aad-application-name "$APPLICATION_NAME" \
-  --service-account-namespace "$SERVICE_ACCOUNT_NAMESPACE" \
-  --service-account-name "$SERVICE_ACCOUNT_NAME" \
-  --service-account-issuer-url "$ISSUER_URL"
-
+# get current subscription id
 
 # create pods that can access the federation token
 cat <<EOF | kubectl apply -f -
