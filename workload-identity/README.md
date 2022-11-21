@@ -4,13 +4,13 @@
 
 Some things that have changed:
 - the steps below use managed identities instead of app registrations
-- you do not neet to install the webhook
+- you do not need to install the webhook
 - the `azwi` CLI is not required
 
 Requirements:
 - bash
 - Azure CLI and logged in to subscription
-- working Kube config and kubectl
+- kubectl
 
 Here are all the commands:
 
@@ -19,15 +19,17 @@ Here are all the commands:
 az extension update --name aks-preview
 
 # register preview feature
-az feature register --namespace "Microsoft.ContainerService" --name "EnableWorkloadIdentityPreview"
+az feature register \
+  --namespace "Microsoft.ContainerService" --name "EnableWorkloadIdentityPreview"
 
 # check if registered
-az feature list -o table --query "[?contains(name, 'Microsoft.ContainerService/EnableWorkloadIdentityPreview')].{Name:name,State:properties.state}"
+az feature list -o table \
+  --query "[?contains(name, 'Microsoft.ContainerService/EnableWorkloadIdentityPreview')].{Name:name,State:properties.state}"
 
 # if registered then continue
 az provider register --namespace Microsoft.ContainerService
 
-# install oidc issuer
+# deploy AKS with oidc enabled
 CLUSTER=kub-oidc
 RG=rg-aks-oidc
 LOCATION=westeurope
@@ -35,9 +37,10 @@ IDENTITY=id-aks-oidc
  
 az group create -n $RG -l $LOCATION
 
-az aks create -g $RG -n $CLUSTER --node-count 1 --enable-oidc-issuer --enable-workload-identity --generate-ssh-keys
+az aks create -g $RG -n $CLUSTER --node-count 1 --enable-oidc-issuer \
+  --enable-workload-identity --generate-ssh-keys
 
-# get cluster credentials
+# get cluster credentials; requires kubectl
 az aks get-credentials -g $RG -n $CLUSTER --admin
 
 # get OIDC issuer URL
@@ -47,15 +50,16 @@ export AKS_OIDC_ISSUER="$(az aks show -n $CLUSTER -g $RG --query "oidcIssuerProf
 export SUBSCRIPTION_ID="$(az account show --query "id" -otsv)"
 
 # create user assigned managed identity
-az identity create --name $IDENTITY --resource-group $RG --location $LOCATION --subscription $SUBSCRIPTION_ID
+az identity create --name $IDENTITY --resource-group $RG \
+  --location $LOCATION --subscription $SUBSCRIPTION_ID
 
 # get identity client id
 export USER_ASSIGNED_CLIENT_ID="$(az identity show -n $IDENTITY -g $RG --query "clientId" -otsv)"
 
-# grant identity contributor role on subscription
-az role assignment create --role "Reader" --assignee $USER_ASSIGNED_CLIENT_ID --subscription $SUBSCRIPTION_ID
-
-
+# grant identity reader role on subscription; we will later use 
+# this identity and use az group list to verify if it works
+az role assignment create --role "Reader" \
+  --assignee $USER_ASSIGNED_CLIENT_ID --subscription $SUBSCRIPTION_ID
 
 # create Kubernetes service account
 SANAME=sademo
@@ -72,8 +76,10 @@ metadata:
   namespace: default
 EOF
 
-# create federated credentials; check the managed identity in the portal to see the federated credentials settings
-az identity federated-credential create --name federatedIdentityName --identity-name $IDENTITY --resource-group $RG --issuer ${AKS_OIDC_ISSUER} \
+# create federated credentials; check the managed identity in the portal 
+# to see the federated credentials settings
+az identity federated-credential create --name fic-sademo --identity-name $IDENTITY \
+  --resource-group $RG --issuer ${AKS_OIDC_ISSUER} \
   --subject system:serviceaccount:default:$SANAME
 
 # create pod that can access the federation token
@@ -109,9 +115,11 @@ EOF
 # Get pod name and get a shell to container in pod
 POD_NAME=$(kubectl get pods -l "app=azcli" -o jsonpath="{.items[0].metadata.name}")
  
+# get a shell to the container
 kubectl exec -it $POD_NAME -- bash
 
-# run inside the container
+# run this inside the container; the webhook created the 
+# environment variables below
 echo $AZURE_CLIENT_ID
 echo $AZURE_TENANT_ID
 echo $AZURE_FEDERATED_TOKEN_FILE
@@ -135,4 +143,10 @@ az login --federated-token "$(cat $AZURE_FEDERATED_TOKEN_FILE)" \
  
 # list resource groups
 az group list
+
+# this should fail
+az group create -n test -l westeurope
+
+# exit the container
+exit
 ```
