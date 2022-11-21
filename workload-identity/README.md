@@ -1,6 +1,11 @@
 # Workload identity
 
-Please see https://blog.baeke.info/2022/05/18/quick-guide-to-kubernetes-workload-identity-on-aks/ for more details.
+⚠️ **Warning:** the post https://blog.baeke.info/2022/05/18/quick-guide-to-kubernetes-workload-identity-on-aks/ which describes the steps below is outdated. The steps below have been updated to reflect the latest changes in the Workload Identity for AKS.
+
+Some things that have changed:
+- the steps below use managed identities instead of app registrations
+- you do not neet to install the webhook
+- the `azwi` CLI is not required
 
 Requirements:
 - bash
@@ -25,15 +30,53 @@ az provider register --namespace Microsoft.ContainerService
 # install oidc issuer
 CLUSTER=kub-oidc
 RG=rg-aks-oidc
+LOCATION=westeurope
+IDENTITY=id-aks-oidc
  
+az group create -n $RG -l $LOCATION
+
 az aks create -g $RG -n $CLUSTER --node-count 1 --enable-oidc-issuer --enable-workload-identity --generate-ssh-keys
+
+# get cluster credentials
+az aks get-credentials -g $RG -n $CLUSTER --admin
 
 # get OIDC issuer URL
 export AKS_OIDC_ISSUER="$(az aks show -n $CLUSTER -g $RG --query "oidcIssuerProfile.issuerUrl" -otsv)"
 
 # get current subscription id
+export SUBSCRIPTION_ID="$(az account show --query "id" -otsv)"
 
-# create pods that can access the federation token
+# create user assigned managed identity
+az identity create --name $IDENTITY --resource-group $RG --location $LOCATION --subscription $SUBSCRIPTION_ID
+
+# get identity client id
+export USER_ASSIGNED_CLIENT_ID="$(az identity show -n $IDENTITY -g $RG --query "clientId" -otsv)"
+
+# grant identity contributor role on subscription
+az role assignment create --role "Reader" --assignee $USER_ASSIGNED_CLIENT_ID --subscription $SUBSCRIPTION_ID
+
+
+
+# create Kubernetes service account
+SANAME=sademo
+
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    azure.workload.identity/client-id: ${USER_ASSIGNED_CLIENT_ID}
+  labels:
+    azure.workload.identity/use: "true"
+  name: $SANAME
+  namespace: default
+EOF
+
+# create federated credentials; check the managed identity in the portal to see the federated credentials settings
+az identity federated-credential create --name federatedIdentityName --identity-name $IDENTITY --resource-group $RG --issuer ${AKS_OIDC_ISSUER} \
+  --subject system:serviceaccount:default:$SANAME
+
+# create pod that can access the federation token
 cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
@@ -53,7 +96,7 @@ spec:
         app: azcli
     spec:
       # needs to refer to service account used with federation
-      serviceAccount: sademo
+      serviceAccount: $SANAME
       containers:
         - name: azcli
           image: mcr.microsoft.com/azure-cli:latest
