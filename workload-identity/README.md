@@ -110,6 +110,25 @@ spec:
             - "/bin/bash"
             - "-c"
             - "sleep infinity"
+          env:
+            - name: AZURE_CLIENT_ID
+              value: XXXXXXXXXXXXXX
+            - name: AZURE_TENANT_ID
+              value: XXXXXXXXXXXXXX
+            - name: AZURE_FEDERATED_TOKEN_FILE
+              value: /var/run/secrets/tokens/azure-identity-token
+          volumeMounts:
+            - mountPath: /var/run/secrets/tokens
+              name: azure-identity-token
+      volumes:
+      - name: azure-identity-token
+        projected:
+          defaultMode: 420
+          sources:
+          - serviceAccountToken:
+              audience: api://AzureADTokenExchange
+              expirationSeconds: 3600
+              path: azure-identity-token
 EOF
 
 # Get pod name and get a shell to container in pod
